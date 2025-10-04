@@ -37,8 +37,8 @@ def session_maker(async_engine: AsyncEngine) -> async_sessionmaker[AsyncSession]
 
 
 @pytest.fixture(scope='session')
-async def dataset(uuid, session_maker: async_sessionmaker[AsyncSession]) -> Dataset:
-    return Dataset(uuid=uuid, session_maker=session_maker)
+async def dataset(uuid, uuid7, session_maker: async_sessionmaker[AsyncSession]) -> Dataset:
+    return Dataset(uuid=uuid, uuid7=uuid7, session_maker=session_maker)
 
 
 @pytest.fixture(scope='function')

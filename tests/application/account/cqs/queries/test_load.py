@@ -1,6 +1,6 @@
-from application.account.cqs.queries.load import LoadByAccountIDQuery, LoadByAccountNameQuery
+from application.account.cqs.queries.load import LoadByAccountIDQuery, LoadByAccountNameAndUserIDQuery
 from application.account.cqs.queries.load import handle as load_handle
-from application.account.cqs.schemas.model import AccountSchema
+from application.account.schemas.model import AccountSchema
 
 
 async def test_load_account_by_name(check_eq, dataset, session_maker):
@@ -9,11 +9,14 @@ async def test_load_account_by_name(check_eq, dataset, session_maker):
     account = await dataset.account()
 
     async with session_maker() as db_session:
-        loaded_by_query = await load_handle(db_session=db_session, query=LoadByAccountNameQuery(name=account.name))
+        loaded_by_query = await load_handle(
+            db_session=db_session,
+            query=LoadByAccountNameAndUserIDQuery(name=account.name, user_id=account.user_id),
+        )
         assert loaded_by_query
 
     async with session_maker() as db_session:
-        loaded_by_kwargs = await load_handle(db_session=db_session, name=account.name)
+        loaded_by_kwargs = await load_handle(db_session=db_session, user_id=account.user_id, name=account.name)
         assert loaded_by_kwargs
 
     check_eq(account, loaded_by_query, loaded_by_kwargs, schema=AccountSchema)
@@ -39,13 +42,16 @@ async def test_load_absent_account(uuid, uuid7, session_maker):
     """Тест загрузки отсутствующего аккаунта"""
 
     name = uuid()
+    user_id = uuid7()
     account_id = uuid7()
 
     async with session_maker() as db_session:
-        loaded = await load_handle(db_session=db_session, query=LoadByAccountNameQuery(name=name))
+        loaded = await load_handle(
+            db_session=db_session, query=LoadByAccountNameAndUserIDQuery(name=name, user_id=user_id)
+        )
         assert loaded is None
 
-        loaded = await load_handle(db_session=db_session, name=name)
+        loaded = await load_handle(db_session=db_session, user_id=user_id, name=name)
         assert loaded is None
 
         loaded = await load_handle(db_session=db_session, query=LoadByAccountIDQuery(account_id=account_id))

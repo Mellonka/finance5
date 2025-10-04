@@ -1,15 +1,16 @@
-from datetime import UTC, datetime
+from datetime import datetime
 from enum import StrEnum
 from uuid import UUID
 
-from sqlalchemy import JSON, Numeric, String
+from sqlalchemy import JSON, ForeignKey, Numeric, String, UniqueConstraint, DateTime
 from sqlalchemy import UUID as SQLAlchemyUUID
 from sqlalchemy.orm import Mapped, mapped_column
 
 from domain.base import Entity
+from domain.user.model import UserID
 from domain.vo.currency import Currency
 from domain.vo.money import Money
-from shared.utils import uuid7
+from shared.utils import now, uuid7
 
 
 class EnumAccountStatus(StrEnum):
@@ -35,14 +36,17 @@ class Account(Entity):
     __tablename__ = 'accounts'
 
     id: Mapped[AccountID] = mapped_column(SQLAlchemyUUID, default=uuid7, primary_key=True)
-    name: Mapped[AccountName] = mapped_column(String(255), unique=True)
+    name: Mapped[AccountName] = mapped_column(String(255))
     description: Mapped[AccountDescription] = mapped_column(String(255), default=None)
+    tags: Mapped[AccountTags] = mapped_column(JSON, default=list)
     type: Mapped[EnumAccountType] = mapped_column(default=EnumAccountType.MONEY)
     status: Mapped[EnumAccountStatus] = mapped_column(default=EnumAccountStatus.ACTIVE)
-    tags: Mapped[AccountTags] = mapped_column(JSON, default=list)
+    user_id: Mapped[UserID] = mapped_column(ForeignKey('users.id'))
 
     balance: Mapped[Money] = mapped_column(Numeric(15, 5), default=Money())
     currency: Mapped[Currency] = mapped_column(String(3), default='RUB')
 
-    created: Mapped[datetime] = mapped_column(default=lambda: datetime.now(UTC))
-    updated: Mapped[datetime] = mapped_column(default=lambda: datetime.now(UTC))
+    created: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now)
+    updated: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now)
+
+    __table_args__ = (UniqueConstraint(user_id, name),)

@@ -1,20 +1,22 @@
 from datetime import UTC, datetime
 
 import asyncpg
+import sqlalchemy.exc
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from application.account.cqs.schemas.model import (
+from application.account.schemas.model import (
     SchemaAccountBalance,
     SchemaAccountCurrency,
     SchemaAccountDescription,
     SchemaAccountName,
+    SchemaAccountStatus,
     SchemaAccountTags,
     SchemaAccountType,
 )
 from domain.account.model import Account
 from domain.vo.currency import SchemaTransferRate, TransferRate
 from shared.cqs.base import CommandBase
-from shared.errors.model import ConflictError, NotFoundError
+from shared.errors.model import ConflictError
 
 
 class UpdateAccountCommandBase(CommandBase):
@@ -72,6 +74,14 @@ class UpdateAccountCurrencyCommand(UpdateAccountCommandBase):
         return account
 
 
+class UpdateAccountStatusCommand(UpdateAccountCommandBase):
+    status: SchemaAccountStatus
+
+    def apply(self, account: Account) -> Account:
+        account.status = self.status
+        return account
+
+
 type UpdateAccountCommand = (
     UpdateAccountNameCommand
     | UpdateAccountDescriptionCommand
@@ -79,15 +89,11 @@ type UpdateAccountCommand = (
     | UpdateAccountTagsCommand
     | UpdateAccountBalanceCommand
     | UpdateAccountCurrencyCommand
+    | UpdateAccountStatusCommand
 )
 
 
-async def handle(
-    *, account: Account | None, db_session: AsyncSession, commands: list[UpdateAccountCommand], **_
-) -> Account:
-    if not account:
-        raise NotFoundError('Account not found')
-
+async def handle(*, account: Account, db_session: AsyncSession, commands: list[UpdateAccountCommand], **_) -> Account:
     if not commands:
         return account
 
@@ -100,7 +106,7 @@ async def handle(
 
     try:
         await db_session.commit()
-    except asyncpg.UniqueViolationError as exc:
+    except (asyncpg.UniqueViolationError, sqlalchemy.exc.IntegrityError) as exc:
         raise ConflictError from exc
 
     return account

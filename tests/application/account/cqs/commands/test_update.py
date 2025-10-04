@@ -11,7 +11,7 @@ from application.account.cqs.commands.update import (
 from application.account.cqs.commands.update import (
     handle as update_handle,
 )
-from application.account.cqs.schemas.model import AccountSchema
+from application.account.schemas.model import AccountSchema
 from domain.account.model import EnumAccountType
 from domain.vo.currency import Currency
 from domain.vo.money import Money

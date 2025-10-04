@@ -2,6 +2,7 @@ from typing import Annotated
 
 from pydantic import AfterValidator, Field
 
+from application.user.schemas.model import SchemaUserID
 from domain.account.model import (
     AccountDescription,
     AccountID,
@@ -33,5 +34,10 @@ class AccountSchema(SchemaBase):
     type: SchemaAccountType
     status: SchemaAccountStatus
     tags: SchemaAccountTags
+    user_id: SchemaUserID
+
     currency: SchemaAccountCurrency
     balance: SchemaAccountBalance
+
+    # created: datetime
+    # updated: datetime

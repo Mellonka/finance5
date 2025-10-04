@@ -1,13 +1,13 @@
 from typing import Any, Callable
 
 from pydantic import TypeAdapter
-from sqlalchemy import ColumnElement, select
+from sqlalchemy import ColumnElement, and_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from application.account.cqs.schemas.model import SchemaAccountID, SchemaAccountName
+from application.account.schemas.model import SchemaAccountID, SchemaAccountName
 from domain.account.model import Account
+from domain.user.model import UserID
 from shared.cqs.base import QueryBase
-from shared.cqs.middlewares.inject_entity import InjectEntityDecorator
 
 
 class LoadAccountQueryBase(QueryBase):
@@ -22,14 +22,22 @@ class LoadByAccountIDQuery(LoadAccountQueryBase):
         return Account.id == self.account_id
 
 
-class LoadByAccountNameQuery(LoadAccountQueryBase):
+class LoadByManyAccountIDQuery(LoadAccountQueryBase):
+    account_id: list[SchemaAccountID]
+
+    def render_filter(self) -> ColumnElement[bool]:
+        return Account.id.in_(self.account_id)
+
+
+class LoadByAccountNameAndUserIDQuery(LoadAccountQueryBase):
+    user_id: UserID
     name: SchemaAccountName
 
     def render_filter(self) -> ColumnElement[bool]:
-        return Account.name == self.name
+        return and_(Account.name == self.name, Account.user_id == self.user_id)
 
 
-type LoadAccountQuery = LoadByAccountIDQuery | LoadByAccountNameQuery | LoadAccountQueryBase
+type LoadAccountQuery = LoadByAccountIDQuery | LoadByAccountNameAndUserIDQuery | LoadAccountQueryBase
 query_parser: Callable[[dict[str, Any]], LoadAccountQuery] = TypeAdapter(LoadAccountQuery).validate_python
 
 
@@ -41,11 +49,3 @@ async def handle(*, db_session: AsyncSession, query: LoadAccountQuery | None = N
         return None
 
     return await db_session.scalar(select(Account).where(query.render_filter()))
-
-
-class InjectAccountDecorator(InjectEntityDecorator):
-    async def load_entity(self, *args, **kwargs) -> dict[str, Any]:
-        return {'account': await handle(**kwargs)}
-
-
-inject_entity = InjectAccountDecorator()

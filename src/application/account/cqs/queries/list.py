@@ -1,18 +1,17 @@
 from enum import StrEnum, auto
 
 from pydantic import Field
-from sqlalchemy import ColumnElement, and_, select, true
+from sqlalchemy import ColumnElement, select, true
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from application.account.cqs.schemas.model import (
+from application.account.schemas.model import (
     SchemaAccountStatus,
     SchemaAccountTags,
     SchemaAccountType,
 )
 from domain.account.model import Account, AccountID
+from domain.user.model import UserID
 from shared.cqs.base import QueryBase
-
-DEFAULT_LIMIT: int = 100
 
 
 class ListAccountQueryBase(QueryBase):
@@ -20,20 +19,18 @@ class ListAccountQueryBase(QueryBase):
         raise NotImplementedError
 
 
-class ListAccountAlwaysTrueQuery(ListAccountQueryBase):
-    def render_filter(self) -> ColumnElement[bool]:
-        return true()
-
-
-class ListAccountTypeAndStatusQuery(ListAccountQueryBase):
+class ListAccountTypeQuery(ListAccountQueryBase):
     type: list[SchemaAccountType] = Field(default_factory=list)
-    status: list[SchemaAccountStatus] = Field(default_factory=list)
 
     def render_filter(self) -> ColumnElement[bool]:
-        type_filter = Account.type.in_(self.type) if self.type else true()
-        status_filter = Account.status.in_(self.status) if self.status else true()
+        return Account.type.in_(self.type) if self.type else true()
 
-        return and_(type_filter, status_filter)
+
+class ListAccountStatusQuery(ListAccountQueryBase):
+    status: SchemaAccountStatus
+
+    def render_filter(self) -> ColumnElement[bool]:
+        return Account.status == self.status
 
 
 class TagsFilterType(StrEnum):
@@ -55,26 +52,25 @@ class ListAccountTagsQuery(ListAccountQueryBase):
         raise NotImplementedError
 
 
-type ListAccountQuery = ListAccountAlwaysTrueQuery | ListAccountTypeAndStatusQuery | ListAccountTagsQuery
+type ListAccountQuery = ListAccountTypeQuery | ListAccountStatusQuery | ListAccountTagsQuery
 
 
 async def handle(
     *,
-    queries: list[ListAccountQuery],
+    user_id: UserID,
     db_session: AsyncSession,
+    queries: list[ListAccountQuery] | None = None,
     cursor: AccountID | None = None,
-    limit: int,
+    limit: int | None = None,
     **_,
 ) -> list[Account]:
-    if not queries:
-        queries = [ListAccountAlwaysTrueQuery()]
+    statement = select(Account).where(Account.user_id == user_id).order_by(Account.id.desc())
 
-    return list(
-        await db_session.scalars(
-            select(Account)
-            .where(Account.id < cursor if cursor is not None else true())
-            .where(*(q.render_filter() for q in queries))
-            .order_by(Account.id.desc())
-            .limit(limit)
-        )
-    )
+    if cursor:
+        statement = statement.where(Account.id < cursor)
+    if limit is not None:
+        statement = statement.limit(limit)
+    if queries:
+        statement = statement.where(*(q.render_filter() for q in queries))
+
+    return list(await db_session.scalars(statement))
