@@ -96,6 +96,7 @@ async def handle(
 
     for command in commands:
         command.apply(transaction)
+
     transaction.updated = dt.datetime.now(dt.UTC)
 
     await db_session.commit()

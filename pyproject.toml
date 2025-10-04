@@ -18,6 +18,10 @@ dependencies = [
 ]
 
 [dependency-groups]
+fastapi = [
+    "fastapi>=0.118.0",
+    "sqladmin[full]>=0.21.0",
+]
 test = [
     "aiosqlite>=0.21.0",
     "pytest>=8.4.1",

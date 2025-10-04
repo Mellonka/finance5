@@ -2,12 +2,12 @@ from datetime import datetime
 from enum import StrEnum
 from uuid import UUID
 
-from sqlalchemy import JSON, String
+from sqlalchemy import JSON, DateTime, String
 from sqlalchemy import UUID as SQLAlchemyUUID
 from sqlalchemy.orm import Mapped, mapped_column
 
 from domain.base import Entity
-from shared.utils import uuid7
+from shared.utils import now, uuid7
 
 
 class EnumUserStatus(StrEnum):
@@ -30,5 +30,5 @@ class User(Entity):
     status: Mapped[EnumUserStatus] = mapped_column(default=EnumUserStatus.ACTIVE)
     tags: Mapped[UserTags] = mapped_column(JSON, default=list)
 
-    created: Mapped[datetime] = mapped_column()
-    updated: Mapped[datetime] = mapped_column()
+    created: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now)
+    updated: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now)

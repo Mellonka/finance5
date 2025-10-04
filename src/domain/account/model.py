@@ -41,7 +41,7 @@ class Account(Entity):
     tags: Mapped[AccountTags] = mapped_column(JSON, default=list)
     type: Mapped[EnumAccountType] = mapped_column(default=EnumAccountType.MONEY)
     status: Mapped[EnumAccountStatus] = mapped_column(default=EnumAccountStatus.ACTIVE)
-    user_id: Mapped[UserID] = mapped_column(ForeignKey('users.id'))
+    user_id: Mapped[UserID] = mapped_column(SQLAlchemyUUID, ForeignKey('users.id'))
 
     balance: Mapped[Money] = mapped_column(Numeric(15, 5), default=Money())
     currency: Mapped[Currency] = mapped_column(String(3), default='RUB')

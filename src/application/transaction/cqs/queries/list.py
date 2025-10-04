@@ -2,7 +2,7 @@ from enum import StrEnum, auto
 import operator
 import datetime as dt
 
-from pydantic import Field
+from pydantic import Field, TypeAdapter
 from sqlalchemy import ColumnElement, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -102,6 +102,7 @@ type ListTransactionQuery = (
     | ListTransactionCategoryQuery
     | ListTransactionAmountQuery
 )
+query_parser = TypeAdapter(ListTransactionQuery).validate_python
 
 
 async def handle(
