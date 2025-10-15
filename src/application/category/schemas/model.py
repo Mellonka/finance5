@@ -11,7 +11,7 @@ from domain.category.model import (
     CategoryTags,
     EnumCategoryStatus,
 )
-from shared.cqs.base import SchemaBase
+from shared.cqs.schemas import SchemaBase
 
 type SchemaCategoryID = CategoryID
 type SchemaCategoryName = Annotated[CategoryName, Field(min_length=1)]

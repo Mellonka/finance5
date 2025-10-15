@@ -4,15 +4,7 @@ from typing import TypeAliasType
 from pydantic import BaseModel, ConfigDict, TypeAdapter
 
 
-class QueryBase(BaseModel):
-    model_config = ConfigDict(str_strip_whitespace=True)
-
-
-class CommandBase(BaseModel):
-    model_config = ConfigDict(str_strip_whitespace=True)
-
-
-class SchemaBase[T](BaseModel):
+class SchemaBase(BaseModel):
     model_config = ConfigDict(str_strip_whitespace=True, from_attributes=True)
 
 

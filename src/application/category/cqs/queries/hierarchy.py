@@ -3,8 +3,8 @@ from collections import defaultdict
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from domain.category.model import Category, CategoryID
-from domain.user.model import UserID
-from application.category.cqs.queries.list import handle as list_handle
+from application.category.cqs.queries.load import load_query_parse
+from shared.cqs.query.handler import QueryHandlerABC
 
 
 def _rec(
@@ -18,11 +18,15 @@ def _rec(
     return categories_hierarchy
 
 
-async def handle(*, user_id: UserID, db_session: AsyncSession, **_) -> dict:
-    categories = await list_handle(db_session=db_session, user_id=user_id)
-    categories_by_parent_id = defaultdict(list)
-    for category in categories:
-        categories_by_parent_id[category.parent_id].append(category)
+class HierarchyHandler(QueryHandlerABC):
+    async def handle(self, *, db_session: AsyncSession, **_) -> dict:
+        categories = await self.list(db_session=db_session, queries=[])
+        categories_by_parent_id = defaultdict(list)
+        for category in categories:
+            categories_by_parent_id[category.parent_id].append(category)
 
-    categories_hierarchy = _rec(None, categories_by_parent_id)
-    return categories_hierarchy
+        categories_hierarchy = _rec(None, categories_by_parent_id)
+        return categories_hierarchy
+
+
+handler = HierarchyHandler(Category, load_query_parse)

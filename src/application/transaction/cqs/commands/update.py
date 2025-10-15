@@ -11,7 +11,7 @@ from application.transaction.schemas.model import (
     SchemaTransactionType,
 )
 from domain.transaction.model import Transaction
-from shared.cqs.base import CommandBase
+from shared.cqs.command import CommandBase
 
 
 class UpdateTransactionCommandBase(CommandBase):

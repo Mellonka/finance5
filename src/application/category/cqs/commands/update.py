@@ -11,7 +11,7 @@ from application.category.schemas.model import (
     SchemaCategoryTags,
 )
 from domain.category.model import Category
-from shared.cqs.base import CommandBase
+from shared.cqs.command import CommandBase
 from shared.errors.model import ConflictError
 
 

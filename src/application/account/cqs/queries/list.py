@@ -1,76 +1,53 @@
-from enum import StrEnum, auto
-
-from pydantic import Field
-from sqlalchemy import ColumnElement, select, true
+from pydantic import TypeAdapter
+from sqlalchemy import ColumnElement
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from application.account.schemas.model import (
+    SchemaAccountID,
+    SchemaAccountName,
     SchemaAccountStatus,
-    SchemaAccountTags,
     SchemaAccountType,
 )
-from domain.account.model import Account, AccountID
-from domain.user.model import UserID
-from shared.cqs.base import QueryBase
+from domain.account.model import Account
+from shared.cqs.query import QueryFilterBase, TypeQueryBase, StatusQueryBase, TagsQueryBase, NameQueryBase
+from application.account.cqs.queries.load import load_query_parse
+from shared.cqs.query.handler import QueryHandlerABC
 
 
-class ListAccountQueryBase(QueryBase):
-    def render_filter(self) -> ColumnElement[bool]:
-        raise NotImplementedError
+class AccountTypeQuery(TypeQueryBase[SchemaAccountType], entity_attr=Account.type):
+    pass
 
 
-class ListAccountTypeQuery(ListAccountQueryBase):
-    type: list[SchemaAccountType] = Field(default_factory=list)
-
-    def render_filter(self) -> ColumnElement[bool]:
-        return Account.type.in_(self.type) if self.type else true()
+class AccountStatusQuery(StatusQueryBase[SchemaAccountStatus], entity_attr=Account.status):
+    pass
 
 
-class ListAccountStatusQuery(ListAccountQueryBase):
-    status: SchemaAccountStatus
-
-    def render_filter(self) -> ColumnElement[bool]:
-        return Account.status == self.status
+class AccountTagsQuery(TagsQueryBase, entity_attr=Account.tags):
+    pass
 
 
-class TagsFilterType(StrEnum):
-    ALL = auto()
-    AT_LEAST_ONE = auto()
+class AccountManyNameQuery(NameQueryBase[SchemaAccountName], entity_attr=Account.name):
+    pass
 
 
-class ListAccountTagsQuery(ListAccountQueryBase):
-    tags: SchemaAccountTags = Field(default_factory=list)
-    filter_type: TagsFilterType = TagsFilterType.ALL
+class AccountManyIDQuery(QueryFilterBase):
+    account_id: SchemaAccountID | list[SchemaAccountID]
 
     def render_filter(self) -> ColumnElement[bool]:
-        match self.filter_type:
-            case TagsFilterType.ALL:
-                return Account.tags.contained_by(self.tags)
-            case TagsFilterType.AT_LEAST_ONE:
-                return Account.tags.overlap(self.tags)
-
-        raise NotImplementedError
+        if isinstance(self.account_id, list):
+            return Account.id.in_(self.account_id)
+        return Account.id == self.account_id
 
 
-type ListAccountQuery = ListAccountTypeQuery | ListAccountStatusQuery | ListAccountTagsQuery
+type ListAccountQuery = (
+    AccountTypeQuery | AccountStatusQuery | AccountTagsQuery | AccountManyIDQuery | AccountManyNameQuery
+)
+list_query_parse = TypeAdapter(ListAccountQuery).validate_python
 
 
-async def handle(
-    *,
-    user_id: UserID,
-    db_session: AsyncSession,
-    queries: list[ListAccountQuery] | None = None,
-    cursor: AccountID | None = None,
-    limit: int | None = None,
-    **_,
-) -> list[Account]:
-    statement = select(Account).where(Account.user_id == user_id).order_by(Account.id.desc())
+class AccountListHandler(QueryHandlerABC):
+    async def handle(self, *, db_session: AsyncSession, queries: list[ListAccountQuery], **_) -> list[Account]:
+        return await self.list(db_session=db_session, queries=queries)  # pyright: ignore[reportArgumentType]
 
-    if cursor:
-        statement = statement.where(Account.id < cursor)
-    if limit is not None:
-        statement = statement.limit(limit)
-    if queries:
-        statement = statement.where(*(q.render_filter() for q in queries))
 
-    return list(await db_session.scalars(statement))
+handler = AccountListHandler(Account, load_query_parse)

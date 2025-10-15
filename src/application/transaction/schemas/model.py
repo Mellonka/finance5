@@ -11,9 +11,10 @@ from domain.transaction.model import (
     TransactionDescription,
     TransactionID,
     TransactionTags,
+    EnumTransactionStatus,
 )
 from domain.vo.money import Money
-from shared.cqs.base import SchemaBase
+from shared.cqs.schemas import SchemaBase
 
 type SchemaTransactionID = TransactionID
 type SchemaTransactionDescription = Annotated[TransactionDescription, Field(default=None)]
@@ -22,6 +23,7 @@ type SchemaTransactionAmount = Annotated[
     Money, AfterValidator(lambda m: m.quantize(Money('1.00000'))), Field(default=Money(), ge=0)
 ]
 type SchemaTransactionType = Annotated[EnumTransactionType, Field(default=EnumTransactionType.EXPENSE)]
+type SchemaTransactionStatus = Annotated[EnumTransactionStatus, Field(default=EnumTransactionStatus.PENDING)]
 
 
 class TransactioSchemaBase(SchemaBase):
@@ -30,6 +32,7 @@ class TransactioSchemaBase(SchemaBase):
     description: SchemaTransactionDescription
     tags: SchemaTransactionTags
     type: SchemaTransactionType
+    status: SchemaTransactionStatus
     user_id: SchemaUserID
 
     account_id: SchemaAccountID

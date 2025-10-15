@@ -12,10 +12,11 @@ from application.account.schemas.model import (
     SchemaAccountStatus,
     SchemaAccountTags,
     SchemaAccountType,
+    SchemaTransferRate,
 )
 from domain.account.model import Account
-from domain.vo.currency import SchemaTransferRate, TransferRate
-from shared.cqs.base import CommandBase
+from domain.vo.money import TransferRate
+from shared.cqs.command import CommandBase
 from shared.errors.model import ConflictError
 
 

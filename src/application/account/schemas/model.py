@@ -1,4 +1,5 @@
 from typing import Annotated
+import datetime as dt
 
 from pydantic import AfterValidator, Field
 
@@ -11,9 +12,9 @@ from domain.account.model import (
     EnumAccountStatus,
     EnumAccountType,
 )
-from domain.vo.currency import Currency
-from domain.vo.money import Money
-from shared.cqs.base import SchemaBase
+from domain.vo.money import Money, TransferRate
+from shared.cqs.schemas import SchemaBase
+from pydantic_extra_types.currency_code import Currency as SchemaCurrency
 
 type SchemaAccountID = AccountID
 type SchemaAccountName = Annotated[AccountName, Field(min_length=1)]
@@ -21,10 +22,12 @@ type SchemaAccountDescription = Annotated[AccountDescription, Field(default=None
 type SchemaAccountType = Annotated[EnumAccountType, Field(default=EnumAccountType.MONEY)]
 type SchemaAccountStatus = Annotated[EnumAccountStatus, Field(default=EnumAccountStatus.ACTIVE)]
 type SchemaAccountTags = Annotated[AccountTags, Field(default_factory=list)]
-type SchemaAccountCurrency = Annotated[Currency, Field(default='RUB')]
+type SchemaAccountCurrency = Annotated[SchemaCurrency, Field(default='RUB')]
 type SchemaAccountBalance = Annotated[
     Money, AfterValidator(lambda m: m.quantize(Money('1.00000'))), Field(default=Money(), ge=0)
 ]
+
+type SchemaTransferRate = Annotated[TransferRate, Field(ge=0)]
 
 
 class AccountSchema(SchemaBase):
@@ -39,5 +42,5 @@ class AccountSchema(SchemaBase):
     currency: SchemaAccountCurrency
     balance: SchemaAccountBalance
 
-    # created: datetime
-    # updated: datetime
+    created: dt.datetime
+    updated: dt.datetime

@@ -1,76 +1,57 @@
-from enum import StrEnum, auto
-
-from pydantic import Field
-from sqlalchemy import ColumnElement, select
+from pydantic import TypeAdapter
+from sqlalchemy import ColumnElement
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from application.category.schemas.model import (
+    SchemaCategoryID,
+    SchemaCategoryName,
     SchemaCategoryParentID,
     SchemaCategoryStatus,
-    SchemaCategoryTags,
 )
-from domain.category.model import Category, CategoryID
-from domain.user.model import UserID
-from shared.cqs.base import QueryBase
+from domain.category.model import Category
+from shared.cqs.query import StatusQueryBase, TagsQueryBase, QueryFilterBase, NameQueryBase
+
+from application.category.cqs.queries.load import load_query_parse
+from shared.cqs.query.handler import QueryHandlerABC
 
 
-class ListCategoryQueryBase(QueryBase):
+class CategoryStatusQuery(StatusQueryBase[SchemaCategoryStatus], entity_attr=Category.status):
+    pass
+
+
+class CategoryTagsQuery(TagsQueryBase, entity_attr=Category.tags):
+    pass
+
+
+class CategoryManyNameQuery(NameQueryBase[SchemaCategoryName], entity_attr=Category.name):
+    pass
+
+
+class CategoryManyIDQuery(QueryFilterBase):
+    category_id: SchemaCategoryID | list[SchemaCategoryID]
+
     def render_filter(self) -> ColumnElement[bool]:
-        raise NotImplementedError
+        if isinstance(self.category_id, list):
+            return Category.id.in_(self.category_id)
+        return Category.id == self.category_id
 
 
-class ListCategoryStatusQuery(ListCategoryQueryBase):
-    status: SchemaCategoryStatus
-
-    def render_filter(self) -> ColumnElement[bool]:
-        return Category.status == self.status
-
-
-class ListCategoryParentIDQuery(ListCategoryQueryBase):
+class CategoryParentIDQuery(QueryFilterBase):
     parent_id: SchemaCategoryParentID
 
     def render_filter(self) -> ColumnElement[bool]:
         return Category.parent_id == self.parent_id
 
 
-class TagsFilterType(StrEnum):
-    ALL = auto()
-    AT_LEAST_ONE = auto()
+type ListCategoryQuery = (
+    CategoryStatusQuery | CategoryTagsQuery | CategoryManyIDQuery | CategoryManyNameQuery | CategoryParentIDQuery
+)
+list_query_parse = TypeAdapter(ListCategoryQuery).validate_python
 
 
-class ListCategoryTagsQuery(ListCategoryQueryBase):
-    tags: SchemaCategoryTags = Field(default_factory=list)
-    filter_type: TagsFilterType = TagsFilterType.ALL
-
-    def render_filter(self) -> ColumnElement[bool]:
-        match self.filter_type:
-            case TagsFilterType.ALL:
-                return Category.tags.contained_by(self.tags)
-            case TagsFilterType.AT_LEAST_ONE:
-                return Category.tags.overlap(self.tags)
-
-        raise NotImplementedError
+class CategoryListHandler(QueryHandlerABC):
+    async def handle(self, *, db_session: AsyncSession, queries: list[ListCategoryQuery], **_) -> list[Category]:
+        return await self.list(db_session=db_session, queries=queries)  # pyright: ignore[reportArgumentType]
 
 
-type ListCategoryQuery = ListCategoryStatusQuery | ListCategoryTagsQuery | ListCategoryParentIDQuery
-
-
-async def handle(
-    *,
-    user_id: UserID,
-    db_session: AsyncSession,
-    queries: list[ListCategoryQuery] | None = None,
-    cursor: CategoryID | None = None,
-    limit: int | None = None,
-    **_,
-) -> list[Category]:
-    statement = select(Category).where(Category.user_id == user_id).order_by(Category.id.desc())
-
-    if cursor:
-        statement = statement.where(Category.id < cursor)
-    if limit is not None:
-        statement = statement.limit(limit)
-    if queries:
-        statement = statement.where(*(q.render_filter() for q in queries))
-
-    return list(await db_session.scalars(statement))
+handler = CategoryListHandler(Category, load_query_parse)

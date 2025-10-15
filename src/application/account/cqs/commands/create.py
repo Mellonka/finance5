@@ -12,7 +12,7 @@ from application.account.schemas.model import (
 )
 from domain.account.model import Account
 from domain.user.model import UserID
-from shared.cqs.base import CommandBase
+from shared.cqs.command import CommandBase
 from shared.errors.model import ConflictError
 
 

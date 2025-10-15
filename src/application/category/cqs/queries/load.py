@@ -1,51 +1,35 @@
-from typing import Any, Callable
-
 from pydantic import TypeAdapter
-from sqlalchemy import ColumnElement, and_, select
+from sqlalchemy import ColumnElement
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from application.category.schemas.model import SchemaCategoryID, SchemaCategoryName
 from domain.category.model import Category
-from domain.user.model import UserID
-from shared.cqs.base import QueryBase
+from shared.cqs.query import QueryFilterBase, QueryHandlerABC
 
 
-class LoadCategoryQueryBase(QueryBase):
-    def render_filter(self) -> ColumnElement[bool]:
-        raise NotImplementedError
-
-
-class LoadByCategoryIDQuery(LoadCategoryQueryBase):
+class LoadByCategoryIDQuery(QueryFilterBase):
     category_id: SchemaCategoryID
 
     def render_filter(self) -> ColumnElement[bool]:
         return Category.id == self.category_id
 
 
-class LoadByManyCategoryIDQuery(LoadCategoryQueryBase):
-    category_id: list[SchemaCategoryID]
-
-    def render_filter(self) -> ColumnElement[bool]:
-        return Category.id.in_(self.category_id)
-
-
-class LoadByCategoryNameAndUserIDQuery(LoadCategoryQueryBase):
-    user_id: UserID
+class LoadByCategoryNameQuery(QueryFilterBase):
     name: SchemaCategoryName
 
     def render_filter(self) -> ColumnElement[bool]:
-        return and_(Category.name == self.name, Category.user_id == self.user_id)
+        return Category.name == self.name
 
 
-type LoadCategoryQuery = LoadByCategoryIDQuery | LoadByCategoryNameAndUserIDQuery | LoadCategoryQueryBase
-query_parser: Callable[[dict[str, Any]], LoadCategoryQuery] = TypeAdapter(LoadCategoryQuery).validate_python
+type LoadCategoryQuery = QueryFilterBase | LoadByCategoryIDQuery | LoadByCategoryNameQuery
+load_query_parse = TypeAdapter(LoadCategoryQuery).validate_python
 
 
-async def handle(*, db_session: AsyncSession, query: LoadCategoryQuery | None = None, **kwargs) -> Category | None:
-    if query is None:
-        query = query_parser(kwargs)
+class CategoryLoadHandler(QueryHandlerABC):
+    async def handle(
+        self, *, db_session: AsyncSession, query: LoadCategoryQuery | None = None, **kwargs
+    ) -> Category | None:
+        return await self.load(db_session=db_session, query=query, **kwargs)
 
-    if type(query) is LoadCategoryQueryBase:
-        return None
 
-    return await db_session.scalar(select(Category).where(query.render_filter()))
+handler = CategoryLoadHandler(Category, load_query_parse)

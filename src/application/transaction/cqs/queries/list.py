@@ -1,75 +1,83 @@
-from enum import StrEnum, auto
-import operator
-import datetime as dt
-
-from pydantic import Field, TypeAdapter
-from sqlalchemy import ColumnElement, select
+from pydantic import TypeAdapter
+from sqlalchemy import ColumnElement, Select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from application.account.schemas.model import SchemaAccountID
-from application.category.schemas.model import SchemaCategoryID
+from application.account.schemas.model import SchemaAccountID, SchemaAccountName
+from application.category.schemas.model import SchemaCategoryID, SchemaCategoryName
 from application.transaction.schemas.model import (
-    SchemaTransactionAmount,
-    SchemaTransactionTags,
+    SchemaTransactionID,
+    SchemaTransactionStatus,
     SchemaTransactionType,
 )
-from domain.transaction.model import Transaction, TransactionID
-from domain.user.model import UserID
-from shared.cqs.base import QueryBase
+from domain.account.model import Account
+from domain.category.model import Category
+from domain.transaction.model import Transaction
+from shared.cqs.query import (
+    QueryFilterBase,
+    DateRangeQueryBase,
+    MoneyRangeQueryBase,
+    TagsQueryBase,
+    StatusQueryBase,
+    TypeQueryBase,
+    QueryStatementBase,
+    QueryHandlerABC,
+)
+from application.transaction.cqs.queries.load import load_query_parse
 
 
-class ListTransactionQueryBase(QueryBase):
+class TransactionDateRangeQuery(DateRangeQueryBase, entity_attr=Transaction.date):
+    pass
+
+
+class TransactionAmountQuery(MoneyRangeQueryBase, entity_attr=Transaction.amount):
+    pass
+
+
+class TransactionTagsQuery(TagsQueryBase, entity_attr=Transaction.tags):
+    pass
+
+
+class TransactionTypeQuery(TypeQueryBase[SchemaTransactionType], entity_attr=Transaction.type):
+    pass
+
+
+class TransactionStatusQuery(StatusQueryBase[SchemaTransactionStatus], entity_attr=Transaction.status):
+    pass
+
+
+class TransactionAccountNameQuery(QueryStatementBase[Transaction]):
+    account_name: SchemaAccountName | list[SchemaAccountName]
+
+    def process_statement(self, statement: Select[tuple[Transaction]]) -> Select[tuple[Transaction]]:
+        return statement.join(Account, Transaction.account_id == Account.id).where(
+            Account.name.in_(self.account_name)
+            if isinstance(self.account_name, list)
+            else Account.name == self.account_name
+        )
+
+
+class TransactionCategoryNameQuery(QueryStatementBase[Transaction]):
+    category_name: SchemaCategoryName | list[SchemaCategoryName]
+
+    def process_statement(self, statement: Select[tuple[Transaction]]) -> Select[tuple[Transaction]]:
+        return statement.join(Category, Transaction.category_id == Category.id).where(
+            Category.name.in_(self.category_name)
+            if isinstance(self.category_name, list)
+            else Category.name == self.category_name
+        )
+
+
+class TransactionManyIDQuery(QueryFilterBase):
+    transaction_id: SchemaTransactionID | list[SchemaTransactionID]
+
     def render_filter(self) -> ColumnElement[bool]:
-        raise NotImplementedError
+        if isinstance(self.transaction_id, list):
+            return Transaction.id.in_(self.transaction_id)
+        return Transaction.id == self.transaction_id
 
 
-class ComparableFieldFilterType(StrEnum):
-    LT = auto()
-    LE = auto()
-    EQ = auto()
-    GE = auto()
-    GT = auto()
-
-    def operator(self, left, right) -> ColumnElement[bool]:
-        return getattr(operator, self.value)(left, right)
-
-
-class ListTransactionDateQuery(ListTransactionQueryBase):
-    date: dt.date
-    filter_type: ComparableFieldFilterType
-
-    def render_filter(self) -> ColumnElement[bool]:
-        return self.filter_type.operator(Transaction.date, self.date)
-
-
-class TagsFilterType(StrEnum):
-    ALL = auto()
-    AT_LEAST_ONE = auto()
-
-
-class ListTransactionTagsQuery(ListTransactionQueryBase):
-    tags: SchemaTransactionTags = Field(default_factory=list)
-    filter_type: TagsFilterType = TagsFilterType.ALL
-
-    def render_filter(self) -> ColumnElement[bool]:
-        match self.filter_type:
-            case TagsFilterType.ALL:
-                return Transaction.tags.contained_by(self.tags)
-            case TagsFilterType.AT_LEAST_ONE:
-                return Transaction.tags.overlap(self.tags)
-
-        raise NotImplementedError
-
-
-class ListTransactionTypeQuery(ListTransactionQueryBase):
-    type: SchemaTransactionType
-
-    def render_filter(self) -> ColumnElement[bool]:
-        return Transaction.type == self.type
-
-
-class ListTransactionAccountQuery(ListTransactionQueryBase):
-    account_id: list[SchemaAccountID] = Field(default_factory=list)
+class TransactionAccountIDQuery(QueryFilterBase):
+    account_id: SchemaAccountID | list[SchemaAccountID]
 
     def render_filter(self) -> ColumnElement[bool]:
         if isinstance(self.account_id, list):
@@ -77,8 +85,8 @@ class ListTransactionAccountQuery(ListTransactionQueryBase):
         return Transaction.account_id == self.account_id
 
 
-class ListTransactionCategoryQuery(ListTransactionQueryBase):
-    category_id: list[SchemaCategoryID] = Field(default_factory=list)
+class TransactionCategoryIDQuery(QueryFilterBase):
+    category_id: SchemaCategoryID | list[SchemaCategoryID]
 
     def render_filter(self) -> ColumnElement[bool]:
         if isinstance(self.category_id, list):
@@ -86,41 +94,24 @@ class ListTransactionCategoryQuery(ListTransactionQueryBase):
         return Transaction.category_id == self.category_id
 
 
-class ListTransactionAmountQuery(ListTransactionQueryBase):
-    amount: SchemaTransactionAmount
-    filter_type: ComparableFieldFilterType
-
-    def render_filter(self) -> ColumnElement[bool]:
-        return self.filter_type.operator(Transaction.amount, self.amount)
-
-
 type ListTransactionQuery = (
-    ListTransactionDateQuery
-    | ListTransactionTagsQuery
-    | ListTransactionTypeQuery
-    | ListTransactionAccountQuery
-    | ListTransactionCategoryQuery
-    | ListTransactionAmountQuery
+    TransactionDateRangeQuery
+    | TransactionAmountQuery
+    | TransactionTagsQuery
+    | TransactionTypeQuery
+    | TransactionStatusQuery
+    | TransactionAccountNameQuery
+    | TransactionCategoryNameQuery
+    | TransactionManyIDQuery
+    | TransactionAccountIDQuery
+    | TransactionCategoryIDQuery
 )
-query_parser = TypeAdapter(ListTransactionQuery).validate_python
+list_queries_parse = TypeAdapter(list[ListTransactionQuery]).validate_python
 
 
-async def handle(
-    *,
-    user_id: UserID,
-    queries: list[ListTransactionQuery],
-    db_session: AsyncSession,
-    cursor: TransactionID | None = None,
-    limit: int | None = None,
-    **_,
-) -> list[Transaction]:
-    statement = select(Transaction).where(Transaction.user_id == user_id).order_by(Transaction.id.desc())
+class TransactionListHandler(QueryHandlerABC):
+    async def handle(self, *, db_session: AsyncSession, queries: list[ListTransactionQuery], **_) -> list[Transaction]:
+        return await self.list(db_session=db_session, queries=queries)  # pyright: ignore[reportArgumentType]
 
-    if cursor:
-        statement = statement.where(Transaction.id < cursor)
-    if limit is not None:
-        statement = statement.limit(limit)
-    if queries:
-        statement = statement.where(*(q.render_filter() for q in queries))
 
-    return list(await db_session.scalars(statement))
+handler = TransactionListHandler(Transaction, load_query_parse)

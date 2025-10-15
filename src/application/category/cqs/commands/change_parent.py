@@ -6,7 +6,7 @@ from application.category.cqs.commands.update import UpdateCategoryCommandBase
 from application.category.schemas.model import SchemaCategoryParentID
 from domain.category.model import Category
 from shared.errors.model import NotFoundError
-from application.category.cqs.queries.load import handle as load_handle
+from application.category.cqs.queries.load import handler
 
 
 class CategoryChangeParentCommand(UpdateCategoryCommandBase):
@@ -17,7 +17,7 @@ async def handle(
     *, category: Category, db_session: AsyncSession, command: CategoryChangeParentCommand, **_
 ) -> Category:
     if command.parent_id:
-        parent_category = await load_handle(db_session=db_session, category_id=command.parent_id)
+        parent_category = await handler.load(db_session=db_session, category_id=command.parent_id)
         if not parent_category or parent_category.user_id != category.user_id:
             raise NotFoundError('Parent category not found')
 

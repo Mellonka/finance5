@@ -1,44 +1,29 @@
-from typing import Any, Callable
-
 from pydantic import TypeAdapter
-from sqlalchemy import ColumnElement, select
+from sqlalchemy import ColumnElement
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from application.transaction.schemas.model import SchemaTransactionID
 from domain.transaction.model import Transaction
-from shared.cqs.base import QueryBase
+from shared.cqs.query import QueryFilterBase
+from shared.cqs.query.handler import QueryHandlerABC
 
 
-class LoadTransactionQueryBase(QueryBase):
-    def render_filter(self) -> ColumnElement[bool]:
-        raise NotImplementedError
-
-
-class LoadByTransactionIDQuery(LoadTransactionQueryBase):
+class TransactionIDQuery(QueryFilterBase):
     transaction_id: SchemaTransactionID
 
     def render_filter(self) -> ColumnElement[bool]:
         return Transaction.id == self.transaction_id
 
 
-class LoadByManyTransactionIDQuery(LoadTransactionQueryBase):
-    transaction_id: list[SchemaTransactionID]
-
-    def render_filter(self) -> ColumnElement[bool]:
-        return Transaction.id.in_(self.transaction_id)
+type LoadTransactionQuery = QueryFilterBase | TransactionIDQuery
+load_query_parse = TypeAdapter(LoadTransactionQuery).validate_python
 
 
-type LoadTransactionQuery = LoadByTransactionIDQuery | LoadTransactionQueryBase
-query_parser: Callable[[dict[str, Any]], LoadTransactionQuery] = TypeAdapter(LoadTransactionQuery).validate_python
+class TransactionLoadHandler(QueryHandlerABC):
+    async def handle(
+        self, *, db_session: AsyncSession, query: LoadTransactionQuery | None = None, **kwargs
+    ) -> Transaction | None:
+        return await self.load(db_session=db_session, query=query, **kwargs)
 
 
-async def handle(
-    *, db_session: AsyncSession, query: LoadTransactionQuery | None = None, **kwargs
-) -> Transaction | None:
-    if query is None:
-        query = query_parser(kwargs)
-
-    if type(query) is LoadTransactionQueryBase:
-        return None
-
-    return await db_session.scalar(select(Transaction).where(query.render_filter()))
+handler = TransactionLoadHandler(Transaction, load_query_parse)
