@@ -1,29 +1,29 @@
-from pydantic import TypeAdapter
-from sqlalchemy import ColumnElement
+from sqlalchemy import ColumnElement, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from application.transaction.schemas.model import SchemaTransactionID
 from domain.transaction.model import Transaction
-from shared.cqs.query import QueryFilterBase
-from shared.cqs.query.handler import QueryHandlerABC
+from domain.user.model import User
+from shared.cqs.query import QueryFilterBase, apply_queries, parse_query_kwargs
 
 
-class TransactionIDQuery(QueryFilterBase):
+class LoadByTransactionIDQuery(QueryFilterBase):
     transaction_id: SchemaTransactionID
 
     def render_filter(self) -> ColumnElement[bool]:
         return Transaction.id == self.transaction_id
 
 
-type LoadTransactionQuery = QueryFilterBase | TransactionIDQuery
-load_query_parse = TypeAdapter(LoadTransactionQuery).validate_python
+async def handle(
+    *, cur_user: User, db_session: AsyncSession, query: LoadByTransactionIDQuery | None = None, **kwargs
+) -> Transaction | None:
+    if not query:
+        queries = parse_query_kwargs(kwargs, [LoadByTransactionIDQuery])
+        if len(queries) == 1:
+            query = queries[0]  # type: ignore
 
+    if not query:
+        return None
 
-class TransactionLoadHandler(QueryHandlerABC):
-    async def handle(
-        self, *, db_session: AsyncSession, query: LoadTransactionQuery | None = None, **kwargs
-    ) -> Transaction | None:
-        return await self.load(db_session=db_session, query=query, **kwargs)
-
-
-handler = TransactionLoadHandler(Transaction, load_query_parse)
+    statement = apply_queries(select(Transaction), query)
+    return await db_session.scalar(statement.where(Transaction.user_id == cur_user.id))

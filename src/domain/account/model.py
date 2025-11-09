@@ -26,7 +26,8 @@ class EnumAccountType(StrEnum):
 
 
 type AccountID = UUID
-type AccountName = str
+type AccountCode = str
+type AccountTitle = str
 type AccountDescription = str | None
 type AccountTags = list[str]
 
@@ -35,7 +36,8 @@ class Account(Entity):
     __tablename__ = 'accounts'
 
     id: Mapped[AccountID] = mapped_column(SQLAlchemyUUID, default=uuid7, primary_key=True)
-    name: Mapped[AccountName] = mapped_column(Text)
+    code: Mapped[AccountCode] = mapped_column(Text)
+    title: Mapped[AccountTitle] = mapped_column(Text)
     description: Mapped[AccountDescription] = mapped_column(Text, default=None)
     tags: Mapped[AccountTags] = mapped_column(JSON, default=list)
     type: Mapped[EnumAccountType] = mapped_column(default=EnumAccountType.MONEY)
@@ -45,7 +47,10 @@ class Account(Entity):
     balance: Mapped[Money] = mapped_column(Numeric(15, 5), default=Money())
     currency: Mapped[Currency] = mapped_column(Text, default='RUB')
 
-    created: Mapped[datetime] = mapped_column(DateTime(timezone=True))
-    updated: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    created: Mapped[datetime] = mapped_column(DateTime(), default=datetime.now)
+    updated: Mapped[datetime] = mapped_column(DateTime(), default=datetime.now)
 
-    __table_args__ = (UniqueConstraint(user_id, name),)
+    __table_args__ = (UniqueConstraint(user_id, code),)
+
+
+Account.id

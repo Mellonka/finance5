@@ -1,23 +1,26 @@
 from application.account.cqs.queries.list import (
-    ListAccountStatusQuery,
-    ListAccountTagsQuery,
-    ListAccountTypeQuery,
+    AccountStatusQuery,
+    AccountTagsQuery,
+    AccountTypeQuery,
 )
 from domain.account.model import EnumAccountStatus, EnumAccountType
 
 
 type_queries = [
-    ListAccountTypeQuery(type=[EnumAccountType.MONEY]),
-    ListAccountTypeQuery(type=[EnumAccountType.LOAN, EnumAccountType.GOAL]),
-    ListAccountTypeQuery(type=[EnumAccountType.MONEY, EnumAccountType.INVESTMENT]),
-    ListAccountTypeQuery(type=list(EnumAccountType)),
-    ListAccountTypeQuery(),
+    AccountTypeQuery(type=[EnumAccountType.MONEY]),
+    AccountTypeQuery(type=[EnumAccountType.LOAN, EnumAccountType.GOAL]),
+    AccountTypeQuery(type=[EnumAccountType.MONEY, EnumAccountType.INVESTMENT]),
+    AccountTypeQuery(type=list(EnumAccountType)),
+    AccountTypeQuery(type=EnumAccountType.MONEY),
+    AccountTypeQuery(type=EnumAccountType.LOAN),
+    AccountTypeQuery(type=EnumAccountType.GOAL),
+    AccountTypeQuery(type=[]),
 ]
 status_queries = [
-    ListAccountStatusQuery(status=EnumAccountStatus.ACTIVE),
-    ListAccountStatusQuery(status=EnumAccountStatus.DISABLED),
+    AccountStatusQuery(status=EnumAccountStatus.ACTIVE),
+    AccountStatusQuery(status=EnumAccountStatus.DISABLED),
 ]
-tags_queries = [ListAccountTagsQuery(tags=[])]
+tags_queries = [AccountTagsQuery(tags=[])]
 
 
 async def test_list(check_eq, uuid, dataset, session_maker):

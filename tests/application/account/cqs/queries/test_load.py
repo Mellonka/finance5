@@ -1,5 +1,5 @@
-from application.account.cqs.queries.load import LoadByAccountIDQuery, LoadByAccountNameAndUserIDQuery
-from application.account.cqs.queries.load import handle as load_handle
+from application.account.cqs.queries.load import LoadByAccountIDQuery, LoadByAccountNameQuery
+from application.account.cqs.queries.load import auto_handle as load_handle
 from application.account.schemas.model import AccountSchema
 
 
@@ -11,7 +11,7 @@ async def test_load_account_by_name(check_eq, dataset, session_maker):
     async with session_maker() as db_session:
         loaded_by_query = await load_handle(
             db_session=db_session,
-            query=LoadByAccountNameAndUserIDQuery(name=account.name, user_id=account.user_id),
+            query=LoadByAccountNameQuery(name=account.name, user_id=account.user_id),
         )
         assert loaded_by_query
 
@@ -46,9 +46,7 @@ async def test_load_absent_account(uuid, uuid7, session_maker):
     account_id = uuid7()
 
     async with session_maker() as db_session:
-        loaded = await load_handle(
-            db_session=db_session, query=LoadByAccountNameAndUserIDQuery(name=name, user_id=user_id)
-        )
+        loaded = await load_handle(db_session=db_session, query=LoadByAccountNameQuery(name=name, user_id=user_id))
         assert loaded is None
 
         loaded = await load_handle(db_session=db_session, user_id=user_id, name=name)

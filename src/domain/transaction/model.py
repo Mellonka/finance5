@@ -2,7 +2,7 @@ import datetime as dt
 from enum import StrEnum
 from uuid import UUID
 
-from sqlalchemy import JSON, DateTime, ForeignKey, Numeric, Text
+from sqlalchemy import JSON, BigInteger, DateTime, ForeignKey, Numeric, Text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from domain.account.model import Account, AccountID
@@ -48,5 +48,7 @@ class Transaction(Entity):
     category_id: Mapped[CategoryID] = mapped_column(ForeignKey('categories.id'))
     category: Mapped[Category] = relationship()
 
-    created: Mapped[dt.datetime] = mapped_column(DateTime(timezone=True))
+    lsn: Mapped[int] = mapped_column(BigInteger)
+    serial: Mapped[int] = mapped_column(BigInteger)
     updated: Mapped[dt.datetime] = mapped_column(DateTime(timezone=True))
+    created: Mapped[dt.datetime] = mapped_column(DateTime(timezone=True))

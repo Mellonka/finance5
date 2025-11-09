@@ -1,10 +1,12 @@
-from pydantic import TypeAdapter
-from sqlalchemy import ColumnElement
+from typing import Any
+from sqlalchemy import ColumnElement, and_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from application.account.schemas.model import SchemaAccountID, SchemaAccountName
+from application.user.schemas.model import SchemaUserID
 from domain.account.model import Account
-from shared.cqs.query import QueryFilterBase, QueryHandlerABC
+from shared.cqs.parser import auto_parse_kwargs
+from shared.cqs.query import QueryFilterBase, apply_queries
 
 
 class LoadByAccountIDQuery(QueryFilterBase):
@@ -16,20 +18,19 @@ class LoadByAccountIDQuery(QueryFilterBase):
 
 class LoadByAccountNameQuery(QueryFilterBase):
     name: SchemaAccountName
+    user_id: SchemaUserID
 
     def render_filter(self) -> ColumnElement[bool]:
-        return Account.name == self.name
+        return and_(Account.code == self.name, Account.user_id == self.user_id)
 
 
-type LoadAccountQuery = QueryFilterBase | LoadByAccountIDQuery | LoadByAccountNameQuery
-load_query_parse = TypeAdapter(LoadAccountQuery).validate_python
+LoadAccountQuery = LoadByAccountIDQuery | LoadByAccountNameQuery
 
 
-class AccountLoadHandler(QueryHandlerABC):
-    async def handle(
-        self, *, db_session: AsyncSession, query: LoadAccountQuery | None = None, **kwargs
-    ) -> Account | None:
-        return await self.load(db_session=db_session, query=query, **kwargs)
+async def handle(*, db_session: AsyncSession, query: LoadAccountQuery, **_) -> Account | None:
+    return await db_session.scalar(apply_queries(select(Account), query))
 
 
-handler = AccountLoadHandler(Account, load_query_parse)
+@auto_parse_kwargs(query_type=LoadAccountQuery)
+async def auto_handle(**kwargs: Any) -> Account | None:
+    return await handle(**kwargs)

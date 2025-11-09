@@ -1,4 +1,5 @@
-import asyncpg
+from typing import Any
+import sqlalchemy
 import sqlalchemy.exc
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -10,10 +11,12 @@ from application.account.schemas.model import (
     SchemaAccountTags,
     SchemaAccountType,
 )
+from application.account.cqs.queries.load import auto_handle as load_handle
 from domain.account.model import Account
-from domain.user.model import UserID
+from domain.user.model import User
 from shared.cqs.command import CommandBase
-from shared.errors.model import ConflictError
+from shared.cqs.parser import auto_parse_kwargs
+from shared.errors import ConflictError
 
 
 class CreateAccountCommand(CommandBase):
@@ -23,10 +26,9 @@ class CreateAccountCommand(CommandBase):
     description: SchemaAccountDescription
     currency: SchemaAccountCurrency
     tags: SchemaAccountTags
-    user_id: UserID
 
 
-async def handle(*, command: CreateAccountCommand, db_session: AsyncSession, **_) -> Account:
+async def handle(*, cur_user: User, db_session: AsyncSession, command: CreateAccountCommand, **_) -> Account:
     account = Account(
         name=command.name,
         description=command.description,
@@ -34,13 +36,20 @@ async def handle(*, command: CreateAccountCommand, db_session: AsyncSession, **_
         balance=command.balance,
         currency=command.currency,
         tags=command.tags,
-        user_id=command.user_id,
+        user_id=cur_user.id,
     )
     db_session.add(account)
 
     try:
         await db_session.commit()
-    except (asyncpg.UniqueViolationError, sqlalchemy.exc.IntegrityError) as exc:
-        raise ConflictError from exc
+    except sqlalchemy.exc.IntegrityError as exc:
+        if await load_handle(db_session=db_session, name=command.name, user_id=cur_user.id):
+            raise ConflictError('An account with that name already exists') from exc
+        raise
 
     return account
+
+
+@auto_parse_kwargs(command_type=CreateAccountCommand)
+async def auto_handle(**kwargs: Any) -> Account:
+    return await handle(**kwargs)

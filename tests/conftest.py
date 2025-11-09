@@ -11,7 +11,7 @@ from sqlalchemy.ext.asyncio import (
 )
 
 from domain.account.model import Account
-from shared.cqs.command import SchemaBase
+from shared.cqs.schemas import SchemaBase
 from shared.utils import uuid as _uuid
 from shared.utils import uuid7 as _uuid7
 

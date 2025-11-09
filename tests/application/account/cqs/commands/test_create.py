@@ -1,15 +1,15 @@
 import pytest
-from sqlalchemy import select
 
 from application.account.cqs.commands.create import CreateAccountCommand
-from application.account.cqs.commands.create import handle as create_handle
+from application.account.cqs.commands.create import auto_handle as create_handle
 from application.account.schemas.model import AccountSchema
-from domain.account.model import Account, EnumAccountStatus
+from domain.account.model import EnumAccountStatus
 from domain.vo.money import Money
-from shared.errors.model import ConflictError
+from shared.errors import ConflictError
 from shared.utils import uuid
 
 
+@pytest.mark.parametrize('use_auto', [True, False])
 @pytest.mark.parametrize(
     'name,description,balance,expected_balance,currency,type,tags',
     [
@@ -20,31 +20,53 @@ from shared.utils import uuid
     ],
 )
 async def test_create_account(
-    uuid7, check_eq, session_maker, name, description, balance, expected_balance, currency, type, tags
+    dataset,
+    check_eq,
+    session_maker,
+    use_auto,
+    name,
+    description,
+    balance,
+    expected_balance,
+    currency,
+    type,
+    tags,
 ):
     """Тест создания аккаунта"""
 
-    command = CreateAccountCommand(
-        name=name,
-        description=description,
-        balance=balance,
-        currency=currency,
-        type=type,
-        tags=tags,
-        user_id=(user_id := uuid7()),
-    )
+    user = await dataset.user()
 
     async with session_maker() as db_session:
-        created_account = await create_handle(db_session=db_session, command=command)
+        if use_auto:
+            created_account = await create_handle(
+                cur_user=user,
+                db_session=db_session,
+                name=name,
+                description=description,
+                balance=balance,
+                currency=currency,
+                type=type,
+                tags=tags,
+            )
+        else:
+            created_account = await create_handle(
+                cur_user=user,
+                db_session=db_session,
+                command=CreateAccountCommand(
+                    name=name,
+                    description=description,
+                    balance=balance,
+                    currency=currency,
+                    type=type,
+                    tags=tags,
+                ),
+            )
+
         assert created_account
 
     async with session_maker() as db_session:
-        loaded_account = await db_session.scalar(
-            select(Account).where(Account.name == name, Account.user_id == user_id)
-        )
+        loaded_account = await dataset.load_account(name=name, user_id=user.id)
         assert loaded_account
-
-    check_eq(created_account, loaded_account, schema=AccountSchema)
 
     assert loaded_account.name == name
     assert loaded_account.description == description
@@ -54,14 +76,36 @@ async def test_create_account(
     assert loaded_account.type == type
     assert loaded_account.tags == tags
     assert loaded_account.status == EnumAccountStatus.ACTIVE
-    assert loaded_account.user_id == user_id
+    assert loaded_account.user_id == user.id
+
+    check_eq(created_account, loaded_account, schema=AccountSchema)
 
 
-async def test_conflict_error(session_maker, uuid7):
+async def test_create_default_account(dataset, session_maker):
+    """Тест создания дефолтного аккаунта"""
+
+    user = await dataset.user()
+
+    async with session_maker() as db_session:
+        await create_handle(cur_user=user, db_session=db_session, name='test_create_default_account')
+
+    account = await dataset.load_account(user_id=user.id, name='test_create_default_account')
+
+    assert account.name == 'test_create_default_account'
+    assert account.description is None
+    assert account.balance == 0
+    assert account.currency == 'RUB'
+    assert account.tags == []
+    assert account.status == EnumAccountStatus.ACTIVE
+    assert account.user_id == user.id
+
+
+async def test_conflict_error(dataset, session_maker):
     """Тест конфликта при создании двух аккаунтов с одним именем"""
 
+    user = await dataset.user()
+
     with pytest.raises(ConflictError):
-        command = CreateAccountCommand.model_validate({'user_id': uuid7(), 'name': uuid()})
         async with session_maker() as db_session:
-            await create_handle(db_session=db_session, command=command)
-            await create_handle(db_session=db_session, command=command)
+            await create_handle(cur_user=user, db_session=db_session, name='test_conflict_error')
+            await create_handle(cur_user=user, db_session=db_session, name='test_conflict_error')

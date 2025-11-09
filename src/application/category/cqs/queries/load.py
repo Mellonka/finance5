@@ -1,35 +1,36 @@
-from pydantic import TypeAdapter
-from sqlalchemy import ColumnElement
+from typing import Any
+from sqlalchemy import ColumnElement, and_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from application.category.schemas.model import SchemaCategoryID, SchemaCategoryName
+from application.user.schemas.model import SchemaUserID
 from domain.category.model import Category
-from shared.cqs.query import QueryFilterBase, QueryHandlerABC
+from shared.cqs.parser import auto_parse_kwargs
+from shared.cqs.query import QueryFilterBase, apply_queries
 
 
 class LoadByCategoryIDQuery(QueryFilterBase):
-    category_id: SchemaCategoryID
+    Category_id: SchemaCategoryID
 
     def render_filter(self) -> ColumnElement[bool]:
-        return Category.id == self.category_id
+        return Category.id == self.Category_id
 
 
 class LoadByCategoryNameQuery(QueryFilterBase):
+    user_id: SchemaUserID
     name: SchemaCategoryName
 
     def render_filter(self) -> ColumnElement[bool]:
-        return Category.name == self.name
+        return and_(Category.name == self.name, Category.user_id == self.user_id)
 
 
-type LoadCategoryQuery = QueryFilterBase | LoadByCategoryIDQuery | LoadByCategoryNameQuery
-load_query_parse = TypeAdapter(LoadCategoryQuery).validate_python
+LoadCategoryQuery = LoadByCategoryIDQuery | LoadByCategoryNameQuery
 
 
-class CategoryLoadHandler(QueryHandlerABC):
-    async def handle(
-        self, *, db_session: AsyncSession, query: LoadCategoryQuery | None = None, **kwargs
-    ) -> Category | None:
-        return await self.load(db_session=db_session, query=query, **kwargs)
+async def handle(*, db_session: AsyncSession, query: LoadCategoryQuery, **_) -> Category | None:
+    return await db_session.scalar(apply_queries(select(Category), query))
 
 
-handler = CategoryLoadHandler(Category, load_query_parse)
+@auto_parse_kwargs(query_type=LoadCategoryQuery)
+async def auto_handle(**kwargs: Any) -> Category | None:
+    return await handle(**kwargs)

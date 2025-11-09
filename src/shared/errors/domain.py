@@ -1,5 +1,8 @@
-class DomainError(Exception):
-    message = 'Базовая доменная ошибка'
+from shared.errors.base import BaseError
+
+
+class DomainError(BaseError):
+    message = 'Ошибка в домене'
 
 
 class ConflictError(DomainError):

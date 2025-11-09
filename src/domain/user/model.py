@@ -25,10 +25,10 @@ class User(Entity):
     __tablename__ = 'users'
 
     id: Mapped[UserID] = mapped_column(SQLAlchemyUUID, default=uuid7, primary_key=True)
-    name: Mapped[UserName] = mapped_column(Text)
+    name: Mapped[UserName] = mapped_column(Text, unique=True)
     description: Mapped[UserDescription] = mapped_column(Text, default=None)
     status: Mapped[EnumUserStatus] = mapped_column(default=EnumUserStatus.ACTIVE)
     tags: Mapped[UserTags] = mapped_column(JSON, default=list)
 
-    created: Mapped[datetime] = mapped_column(DateTime(timezone=True))
-    updated: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    created: Mapped[datetime] = mapped_column(DateTime(), default=datetime.now)
+    updated: Mapped[datetime] = mapped_column(DateTime(), default=datetime.now)
