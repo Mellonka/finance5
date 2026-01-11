@@ -1,18 +1,18 @@
-from typing import Any, Literal, get_args
-from sqlalchemy import ColumnElement, not_, select
-from sqlalchemy.ext.asyncio import AsyncSession
+from typing import Literal
 
+from sqlalchemy import ColumnElement, not_, select
+
+from application.account.cqs.queries.load import AccountsIsolateByUser
 from application.account.schemas.model import (
+    SchemaAccountCode,
     SchemaAccountID,
-    SchemaAccountName,
-    SchemaAccountStatus,
     SchemaAccountTags,
     SchemaAccountType,
 )
 from application.user.schemas.model import SchemaUserID
-from domain.account.model import Account
-from shared.cqs.parser import auto_parse_kwargs
-from shared.cqs.query import QueryFilterBase, apply_queries
+from domain.account.model import Account, EnumAccountStatus
+from shared.cqs.generator import generate_list_handle
+from shared.cqs.query import QueryFilterBase
 
 
 class AccountTypeQuery(QueryFilterBase):
@@ -24,40 +24,13 @@ class AccountTypeQuery(QueryFilterBase):
         return Account.type == self.type
 
 
-class AccountStatusQuery(QueryFilterBase):
-    status: SchemaAccountStatus | list[SchemaAccountStatus]
+class AccountCodeQuery(QueryFilterBase):
+    code: SchemaAccountCode | list[SchemaAccountCode]
 
     def render_filter(self) -> ColumnElement[bool]:
-        if isinstance(self.status, list):
-            return Account.status.in_(self.status)
-        return Account.status == self.status
-
-
-class AccountTagsQuery(QueryFilterBase):
-    tags: SchemaAccountTags
-    filter_type: Literal['HAVE_ANY', 'HAVE_ALL', 'HAVE_NOTHING', 'HAVE_SAME'] = 'HAVE_ALL'
-
-    def render_filter(self) -> ColumnElement[bool]:
-        match self.filter_type:
-            case 'HAVE_ALL':
-                return Account.tags.contains(self.tags)
-            case 'HAVE_ANY':
-                return Account.tags.overlap(self.tags)
-            case 'HAVE_NOTHING':
-                return not_(Account.tags.overlap(self.tags))
-            case 'HAVE_SAME':
-                return Account.tags == self.tags
-
-        raise ValueError(f'Unknown filter_type={self.filter_type}')
-
-
-class AccountNameQuery(QueryFilterBase):
-    name: SchemaAccountName | list[SchemaAccountName]
-
-    def render_filter(self) -> ColumnElement[bool]:
-        if isinstance(self.name, list):
-            return Account.code.in_(self.name)
-        return Account.code == self.name
+        if isinstance(self.code, list):
+            return Account.code.in_(self.code)
+        return Account.code == self.code
 
 
 class AccountIDQuery(QueryFilterBase):
@@ -78,15 +51,32 @@ class AccountUserIDQuery(QueryFilterBase):
         return Account.user_id == self.user_id
 
 
-ListAccountQuery = (
-    AccountTypeQuery | AccountStatusQuery | AccountTagsQuery | AccountIDQuery | AccountNameQuery | AccountUserIDQuery
+class AccountTagsQuery(QueryFilterBase):
+    tags: SchemaAccountTags
+    filter_type: Literal['HAVE_ANY', 'HAVE_ALL', 'HAVE_NOTHING', 'HAVE_EXACTLY'] = 'HAVE_ALL'
+
+    def render_filter(self) -> ColumnElement[bool]:
+        match self.filter_type:
+            case 'HAVE_ALL':
+                return Account.tags.contains(self.tags)
+            case 'HAVE_ANY':
+                return Account.tags.overlap(self.tags)
+            case 'HAVE_NOTHING':
+                return not_(Account.tags.overlap(self.tags))
+            case 'HAVE_EXACTLY':
+                return Account.tags == self.tags
+
+        raise ValueError(f'Unknown filter_type={self.filter_type}')
+
+
+handle = generate_list_handle(
+    base_statement=select(Account).where(Account.status == EnumAccountStatus.ACTIVE).order_by(Account.id),
+    query_types=[
+        AccountTypeQuery,
+        AccountTagsQuery,
+        AccountIDQuery,
+        AccountCodeQuery,
+        AccountUserIDQuery,
+        AccountsIsolateByUser,  # Изолируем по пользователю если пробросили cur_user
+    ],
 )
-
-
-async def handle(*, db_session: AsyncSession, queries: list[ListAccountQuery], **_) -> list[Account]:
-    return list(await db_session.scalars(apply_queries(select(Account), *queries)))
-
-
-@auto_parse_kwargs(query_types=get_args(ListAccountQuery))
-async def auto_handle(**kwargs: Any) -> list[Account]:
-    return await handle(**kwargs)

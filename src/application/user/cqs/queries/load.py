@@ -1,10 +1,12 @@
 from typing import Any
-from sqlalchemy.ext.asyncio import AsyncSession
+
 from sqlalchemy import ColumnElement, select
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from application.user.schemas.model import SchemaUserID, SchemaUserName
 from domain.user.model import User
 from shared.cqs.parser import auto_parse_kwargs
 from shared.cqs.query import QueryFilterBase, apply_queries
-from application.user.schemas.model import SchemaUserID, SchemaUserName
 
 
 class LoadByUserNameQuery(QueryFilterBase):

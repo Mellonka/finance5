@@ -1,4 +1,5 @@
 from typing import Any, ClassVar
+
 from sqlalchemy import Select
 from sqlalchemy.orm import InstrumentedAttribute
 
@@ -13,6 +14,12 @@ class FilterHandler[T]:
                 statement = handle(entity_cls, statement, filters.pop(filter_name))
         return statement
 
+    @classmethod
+    def for_update(cls, entity_cls: type[T], statement: Select[tuple[T]], value: bool) -> Select[tuple[T]]:
+        if value:
+            return statement.with_for_update()
+        return statement
+
 
 class UseInForArrays[T](FilterHandler[T]):
     blacklist: ClassVar[set[InstrumentedAttribute]] = set()
@@ -23,7 +30,7 @@ class UseInForArrays[T](FilterHandler[T]):
     ) -> Select[tuple[T]]:
         for filter_name in list(filters):
             entity_field = getattr(entity_cls, filter_name, None)
-            if entity_field and entity_field not in cls.blacklist and isinstance(filters[filter_name], (tuple, list)):
+            if entity_field and entity_field not in cls.blacklist and isinstance(filters[filter_name], tuple | list):
                 statement = statement.where(entity_field.in_(filters.pop(filter_name)))
 
         return statement

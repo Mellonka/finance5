@@ -1,36 +1,61 @@
-from typing import Any
-from sqlalchemy import ColumnElement, and_, select
-from sqlalchemy.ext.asyncio import AsyncSession
+import functools
 
-from application.category.schemas.model import SchemaCategoryID, SchemaCategoryName
-from application.user.schemas.model import SchemaUserID
+from sqlalchemy import ColumnElement, Select, select
+
+from application.category.schemas.model import SchemaCategoryCode, SchemaCategoryID
 from domain.category.model import Category
-from shared.cqs.parser import auto_parse_kwargs
-from shared.cqs.query import QueryFilterBase, apply_queries
+from domain.user.model import User
+from shared.cqs.generator import generate_load_handle
+from shared.cqs.query import QueryFilterBase, QueryStatementBase
 
 
 class LoadByCategoryIDQuery(QueryFilterBase):
-    Category_id: SchemaCategoryID
+    category_id: SchemaCategoryID
 
     def render_filter(self) -> ColumnElement[bool]:
-        return Category.id == self.Category_id
+        return Category.id == self.category_id
 
 
-class LoadByCategoryNameQuery(QueryFilterBase):
-    user_id: SchemaUserID
-    name: SchemaCategoryName
+class LoadByCategoryCodeQuery(QueryFilterBase):
+    code: SchemaCategoryCode
 
     def render_filter(self) -> ColumnElement[bool]:
-        return and_(Category.name == self.name, Category.user_id == self.user_id)
+        return Category.code == self.code
 
 
-LoadCategoryQuery = LoadByCategoryIDQuery | LoadByCategoryNameQuery
+class CategoryIsolateByUser(QueryFilterBase):
+    cur_user: User
+
+    def render_filter(self) -> ColumnElement[bool]:
+        return Category.user_id == self.cur_user.id
 
 
-async def handle(*, db_session: AsyncSession, query: LoadCategoryQuery, **_) -> Category | None:
-    return await db_session.scalar(apply_queries(select(Category), query))
+class LoadCategoryForUpdate(QueryStatementBase):
+    for_update: bool
+
+    def apply_query(self, statement: Select) -> Select:
+        if self.for_update:
+            return statement.with_for_update()
+        return statement
 
 
-@auto_parse_kwargs(query_type=LoadCategoryQuery)
-async def auto_handle(**kwargs: Any) -> Category | None:
-    return await handle(**kwargs)
+handle = generate_load_handle(
+    base_statement=select(Category),
+    query_types=[
+        LoadByCategoryIDQuery | LoadByCategoryCodeQuery,
+        LoadCategoryForUpdate,
+        CategoryIsolateByUser,  # Изолируем по пользователю если пробросили cur_user
+    ],
+)
+
+
+def load_category(for_update: bool = False):
+    def decorator(func):
+        @functools.wraps(func)
+        async def wrapper(**kwargs):
+            kwargs['category'] = await handle(**kwargs, for_update=for_update)
+            return await func(**kwargs)
+
+        return wrapper
+
+    return decorator

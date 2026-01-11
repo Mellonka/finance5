@@ -1,21 +1,22 @@
+from collections.abc import Sequence
 from functools import wraps
-from typing import Any, Sequence
+from types import UnionType
+from typing import Any
 
 from pydantic import BaseModel, ValidationError
+
 from shared.cqs.command import CommandBase
 from shared.cqs.query import QueryBase
-from shared.cqs.schemas import get_type_adapter
+from shared.cqs.schemas import var_validate
 
 
 class EmptySchema(BaseModel):
     """Для пустых kwargs"""
 
 
-def parse_kwargs[T](kwargs: dict[str, Any], type: type[T]) -> T | None:
-    type_adapter = get_type_adapter(EmptySchema | type)
-
+def parse_kwargs[T](kwargs: dict[str, Any], type: type[T] | UnionType) -> T | None:
     try:
-        parsed = type_adapter.validate_python(kwargs)
+        parsed = var_validate(type | EmptySchema, kwargs)
     except ValidationError:
         return
     else:
@@ -23,8 +24,8 @@ def parse_kwargs[T](kwargs: dict[str, Any], type: type[T]) -> T | None:
             return parsed
 
 
-def parse_kwargs_many[T](kwargs: dict[str, Any], types: Sequence[type[T]]) -> list[T]:
-    return [parsed for t in types if (parsed := parse_kwargs(kwargs, t))]
+def parse_kwargs_many[T](kwargs: dict[str, Any], types: Sequence[type[T] | UnionType]) -> list[T]:
+    return [parsed for t in types if (parsed := parse_kwargs(kwargs, t)) is not None]
 
 
 def auto_parse_kwargs(
@@ -34,6 +35,10 @@ def auto_parse_kwargs(
     query_type: Any | None = None,
     query_types: Sequence[type[QueryBase]] | None = None,
 ):
+    """
+    Собирает команду(-ы) или запрос(-ы) из kwargs, выполняет валидацию
+    """
+
     def decorator(func):
         @wraps(func)
         async def wrapper(**kwargs: Any):
@@ -44,15 +49,15 @@ def auto_parse_kwargs(
             ):
                 kwargs['command'] = command
 
+            kwargs.setdefault('commands', [])
             if command_types is not None and (commands := parse_kwargs_many(kwargs, command_types)):
-                kwargs.setdefault('commands', [])
                 kwargs['commands'].extend(commands)
 
             if query_type is not None and not kwargs.get('query') and (query := parse_kwargs(kwargs, query_type)):
                 kwargs['query'] = query
 
+            kwargs.setdefault('queries', [])
             if query_types is not None and (queries := parse_kwargs_many(kwargs, query_types)):
-                kwargs.setdefault('queries', [])
                 kwargs['queries'].extend(queries)
 
             return await func(**kwargs)

@@ -1,7 +1,8 @@
 from typing import Annotated
-from pydantic import Field
-from domain.user.model import EnumUserStatus, UserDescription, UserID, UserName, UserTags
 
+from pydantic import Field
+
+from domain.user.model import EnumUserStatus, UserDescription, UserID, UserName, UserTags
 
 type SchemaUserID = UserID
 type SchemaUserName = Annotated[UserName, Field(min_length=1)]

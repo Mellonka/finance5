@@ -4,7 +4,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from domain.account.model import Account
-from domain.category.model import Category, CategoryID
+from domain.category.model import Category, CategoryID, EnumCategoryStatus
 from domain.user.model import User
 
 
@@ -20,10 +20,15 @@ def _rec(
 
 
 async def handle(*, cur_user: User, db_session: AsyncSession, **_) -> dict:
-    categories = await db_session.scalars(select(Category).where(Account.user_id == cur_user.id))
+    categories = await db_session.scalars(
+        select(Category).where(
+            Account.user_id == cur_user.id,
+            Category.status == EnumCategoryStatus.ACTIVE,
+        )
+    )
+
     categories_by_parent_id = defaultdict(list)
     for category in categories:
         categories_by_parent_id[category.parent_id].append(category)
 
-    categories_hierarchy = _rec(None, categories_by_parent_id)
-    return categories_hierarchy
+    return _rec(None, categories_by_parent_id)

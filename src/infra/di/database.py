@@ -1,9 +1,8 @@
-from typing import AsyncGenerator
-from dependency_injector.providers import Configuration, Singleton
+import functools
+
 from dependency_injector.containers import DeclarativeContainer
-
-
-from sqlalchemy.ext.asyncio import create_async_engine, async_sessionmaker, AsyncSession
+from dependency_injector.providers import Configuration, Singleton
+from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
 
 class DatabaseContainer(DeclarativeContainer):
@@ -25,7 +24,16 @@ class DatabaseContainer(DeclarativeContainer):
 postgres_container = DatabaseContainer()
 
 
-async def async_db_session() -> AsyncGenerator[AsyncSession, None]:
-    async_session_maker = postgres_container.async_session_maker()
-    async with async_session_maker() as db_session:
-        yield db_session
+def use_db_session(func):
+    @functools.wraps(func)
+    async def wrapper(**kwargs):
+        if 'db_session' in kwargs:
+            return await func(**kwargs)
+
+        if 'async_session_maker' not in kwargs:
+            raise ValueError('async_session_maker is required for this function')
+
+        async with kwargs['async_session_maker']() as db_session:
+            return await func(db_session=db_session, **kwargs)
+
+    return wrapper

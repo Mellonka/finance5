@@ -2,8 +2,8 @@ import pytest
 
 from application.account.cqs.commands.create import CreateAccountCommand
 from application.account.cqs.commands.create import auto_handle as create_handle
-from application.account.schemas.model import AccountSchema
-from domain.account.model import EnumAccountStatus
+from application.account.schemas.model import AccountSchema, SchemaAccountBalance, SchemaAccountCurrency
+from domain.account.model import EnumAccountStatus, EnumAccountType
 from domain.vo.money import Money
 from shared.errors import ConflictError
 from shared.utils import uuid
@@ -11,26 +11,27 @@ from shared.utils import uuid
 
 @pytest.mark.parametrize('use_auto', [True, False])
 @pytest.mark.parametrize(
-    'name,description,balance,expected_balance,currency,type,tags',
+    'code,title,description,balance,expected_balance,currency,type,tags',
     [
-        [uuid(), uuid(), '69.69', '69.69000', 'USD', 'MONEY', []],
-        [uuid(), None, '69.6969', '69.69690', 'RUB', 'GOAL', ['some_tag']],
-        [uuid(), uuid(), '99.696961', '99.69696', 'USD', 'MONEY', []],
-        [uuid(), uuid(), '99.696967', '99.69697', 'USD', 'MONEY', []],
+        [uuid(), uuid(), uuid(), '69.69', '69.69000', 'USD', EnumAccountType.MONEY, []],
+        [uuid(), uuid(), None, '69.6969', '69.69690', 'RUB', EnumAccountType.GOAL, ['some_tag']],
+        [uuid(), uuid(), uuid(), '99.696961', '99.69696', 'USD', EnumAccountType.MONEY, []],
+        [uuid(), uuid(), uuid(), '99.696967', '99.69697', 'USD', EnumAccountType.MONEY, []],
     ],
 )
 async def test_create_account(
     dataset,
     check_eq,
     session_maker,
-    use_auto,
-    name,
-    description,
-    balance,
-    expected_balance,
-    currency,
-    type,
-    tags,
+    use_auto: bool,
+    code: str,
+    title: str,
+    description: str | None,
+    balance: SchemaAccountBalance,
+    expected_balance: str,
+    currency: SchemaAccountCurrency,
+    type: EnumAccountType,
+    tags: list[str],
 ):
     """Тест создания аккаунта"""
 
@@ -41,7 +42,8 @@ async def test_create_account(
             created_account = await create_handle(
                 cur_user=user,
                 db_session=db_session,
-                name=name,
+                code=code,
+                title=title,
                 description=description,
                 balance=balance,
                 currency=currency,
@@ -53,7 +55,8 @@ async def test_create_account(
                 cur_user=user,
                 db_session=db_session,
                 command=CreateAccountCommand(
-                    name=name,
+                    code=code,
+                    title=title,
                     description=description,
                     balance=balance,
                     currency=currency,
@@ -65,10 +68,10 @@ async def test_create_account(
         assert created_account
 
     async with session_maker() as db_session:
-        loaded_account = await dataset.load_account(name=name, user_id=user.id)
+        loaded_account = await dataset.load_account(code=code, user_id=user.id)
         assert loaded_account
 
-    assert loaded_account.name == name
+    assert loaded_account.title == title
     assert loaded_account.description == description
     assert str(loaded_account.balance) == expected_balance
     assert loaded_account.balance == Money(expected_balance)

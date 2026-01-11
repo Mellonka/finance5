@@ -37,8 +37,35 @@ line-length = 120
 [tool.ruff.format]
 quote-style = "single"
 
+[tool.ruff.lint]
+select = [
+    "ASYNC",
+    "B",
+    "C901",
+    # "DTZ,
+    "DTZ004",
+    "DTZ012",
+    "E",
+    "F",
+    "I",
+    "ICN",
+    "PERF",
+    "PLE",
+    "PLR",
+    "PYI030",
+    "PYI055",
+    "PYI058",
+    "RUF",
+    "TC",
+    "UP",
+]
+ignore = [
+    "B905",
+    "RUF003",
+]
+
 [tool.pyright]
-typeCheckingMode = "standart"
+typeCheckingMode = "standard"
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

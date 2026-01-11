@@ -1,51 +1,49 @@
 import sqlalchemy.exc
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from application.category.errors import CategoryIntegrityError
 from application.category.schemas.model import (
+    SchemaCategoryCode,
     SchemaCategoryDescription,
-    SchemaCategoryName,
     SchemaCategoryParentID,
     SchemaCategoryTags,
+    SchemaCategoryTitle,
 )
 from domain.category.model import Category
-from domain.user.model import UserID
+from domain.user.model import User
 from shared.cqs.command import CommandBase
-from shared.errors import ConflictError, NotFoundError
-from application.category.cqs.queries.load import auto_handle as load_handle
+from shared.cqs.parser import auto_parse_kwargs
 
 
 class CreateCategoryCommand(CommandBase):
-    name: SchemaCategoryName
+    code: SchemaCategoryCode
+    title: SchemaCategoryTitle
     description: SchemaCategoryDescription
     tags: SchemaCategoryTags
     parent_id: SchemaCategoryParentID
-    user_id: UserID
 
 
-async def handle(*, command: CreateCategoryCommand, db_session: AsyncSession, **_) -> Category:
-    if command.parent_id:
-        parent_category = await load_handle(db_session=db_session, category_id=command.parent_id)
-        if not parent_category or parent_category.user_id != command.user_id:
-            raise NotFoundError('Parent category not found')
-
-    if await load_handle(name=command.name, user_id=command.user_id, db_session=db_session):
-        raise ConflictError('')
-
+@auto_parse_kwargs(command_type=CreateCategoryCommand)
+async def handle(
+    *,
+    cur_user: User,
+    db_session: AsyncSession,
+    command: CreateCategoryCommand,
+    **_,
+) -> Category:
     category = Category(
-        name=command.name,
+        code=command.code,
+        title=command.title,
         description=command.description,
         tags=command.tags,
         parent_id=command.parent_id,
-        user_id=command.user_id,
+        user_id=cur_user.id,
     )
     db_session.add(category)
 
     try:
         await db_session.commit()
     except sqlalchemy.exc.IntegrityError as exc:
-        if await load_handle(name=command.name, user_id=command.user_id, db_session=db_session):
-            raise ConflictError('') from exc
-
-        raise
+        raise CategoryIntegrityError from exc
 
     return category

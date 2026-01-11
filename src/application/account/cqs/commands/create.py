@@ -1,26 +1,26 @@
-from typing import Any
 import sqlalchemy
 import sqlalchemy.exc
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from application.account.errors import AccountIntegrityError
 from application.account.schemas.model import (
     SchemaAccountBalance,
+    SchemaAccountCode,
     SchemaAccountCurrency,
     SchemaAccountDescription,
-    SchemaAccountName,
     SchemaAccountTags,
+    SchemaAccountTitle,
     SchemaAccountType,
 )
-from application.account.cqs.queries.load import auto_handle as load_handle
 from domain.account.model import Account
 from domain.user.model import User
 from shared.cqs.command import CommandBase
 from shared.cqs.parser import auto_parse_kwargs
-from shared.errors import ConflictError
 
 
 class CreateAccountCommand(CommandBase):
-    name: SchemaAccountName
+    code: SchemaAccountCode
+    title: SchemaAccountTitle
     type: SchemaAccountType
     balance: SchemaAccountBalance
     description: SchemaAccountDescription
@@ -28,9 +28,17 @@ class CreateAccountCommand(CommandBase):
     tags: SchemaAccountTags
 
 
-async def handle(*, cur_user: User, db_session: AsyncSession, command: CreateAccountCommand, **_) -> Account:
+@auto_parse_kwargs(command_type=CreateAccountCommand)
+async def handle(
+    *,
+    cur_user: User,
+    db_session: AsyncSession,
+    command: CreateAccountCommand,
+    **_,
+) -> Account:
     account = Account(
-        name=command.name,
+        code=command.code,
+        title=command.title,
         description=command.description,
         type=command.type,
         balance=command.balance,
@@ -43,13 +51,6 @@ async def handle(*, cur_user: User, db_session: AsyncSession, command: CreateAcc
     try:
         await db_session.commit()
     except sqlalchemy.exc.IntegrityError as exc:
-        if await load_handle(db_session=db_session, name=command.name, user_id=cur_user.id):
-            raise ConflictError('An account with that name already exists') from exc
-        raise
+        raise AccountIntegrityError from exc
 
     return account
-
-
-@auto_parse_kwargs(command_type=CreateAccountCommand)
-async def auto_handle(**kwargs: Any) -> Account:
-    return await handle(**kwargs)

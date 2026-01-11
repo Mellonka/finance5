@@ -1,7 +1,7 @@
 import base64
-from dataclasses import dataclass, field, astuple
-from enum import StrEnum
 import json
+from dataclasses import astuple, dataclass, field
+from enum import StrEnum
 from typing import Any, Self
 
 

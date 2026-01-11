@@ -5,7 +5,6 @@ from application.account.cqs.queries.list import (
 )
 from domain.account.model import EnumAccountStatus, EnumAccountType
 
-
 type_queries = [
     AccountTypeQuery(type=[EnumAccountType.MONEY]),
     AccountTypeQuery(type=[EnumAccountType.LOAN, EnumAccountType.GOAL]),

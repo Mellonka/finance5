@@ -16,7 +16,7 @@ class QueryStatementBase(QueryBase):
         raise NotImplementedError
 
 
-def apply_queries(statement: Select, *queries: QueryBase) -> Select:
+def apply_queries[T](statement: Select[tuple[T]], *queries: QueryBase) -> Select[tuple[T]]:
     filters = []
     for query in queries:
         match query:

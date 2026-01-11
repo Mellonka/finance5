@@ -2,7 +2,7 @@ import datetime as dt
 from enum import StrEnum
 from uuid import UUID
 
-from sqlalchemy import JSON, BigInteger, DateTime, ForeignKey, Numeric, Text
+from sqlalchemy import JSON, BigInteger, DateTime, ForeignKey, Numeric, Text, func
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from domain.account.model import Account, AccountID
@@ -14,8 +14,8 @@ from shared.utils import uuid7
 
 
 class EnumTransactionType(StrEnum):
-    EXPENSE = 'EXPENSE'
     INCOME = 'INCOME'
+    EXPENSE = 'EXPENSE'
 
 
 class EnumTransactionStatus(StrEnum):
@@ -48,7 +48,7 @@ class Transaction(Entity):
     category_id: Mapped[CategoryID] = mapped_column(ForeignKey('categories.id'))
     category: Mapped[Category] = relationship()
 
-    lsn: Mapped[int] = mapped_column(BigInteger)
-    serial: Mapped[int] = mapped_column(BigInteger)
-    updated: Mapped[dt.datetime] = mapped_column(DateTime(timezone=True))
-    created: Mapped[dt.datetime] = mapped_column(DateTime(timezone=True))
+    lsn: Mapped[int] = mapped_column(BigInteger, onupdate=func.next_val())
+    serial: Mapped[int] = mapped_column(BigInteger, server_default=func.next_val())
+    created: Mapped[dt.datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    updated: Mapped[dt.datetime] = mapped_column(DateTime(timezone=True), onupdate=func.now())

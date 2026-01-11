@@ -1,11 +1,12 @@
 from typing import Any
+
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from application.user.schemas.model import SchemaUserName, SchemaUserDescription, SchemaUserStatus, SchemaUserTags
+from application.user.cqs.queries.load import auto_handle as load_handle
+from application.user.schemas.model import SchemaUserDescription, SchemaUserName, SchemaUserStatus, SchemaUserTags
 from domain.user.model import User
 from shared.cqs.command import CommandBase
 from shared.cqs.parser import auto_parse_kwargs
-from application.user.cqs.queries.load import auto_handle as load_handle
 from shared.errors import ConflictError
 
 

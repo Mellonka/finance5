@@ -1,44 +1,43 @@
-from datetime import datetime
 from typing import Any, get_args
 
+import asyncpg
+import sqlalchemy.exc
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from application.category.cqs.queries.load import auto_handle as load_handle
+from application.category.cqs.queries.load import load_category
+from application.category.errors import CategoryConflictError, CategoryNotFoundError
 from application.category.schemas.model import (
+    SchemaCategoryCode,
     SchemaCategoryDescription,
-    SchemaCategoryID,
-    SchemaCategoryName,
     SchemaCategoryStatus,
     SchemaCategoryTags,
+    SchemaCategoryTitle,
 )
-from domain.category.model import Category, EnumCategoryStatus
+from domain.category.model import Category
 from shared.cqs.command import CommandBase
 from shared.cqs.parser import auto_parse_kwargs
-from shared.errors import ConflictError
-from shared.errors.domain import DomainError, NotFoundError
 
 
-class UpdateCategoryNameCommand(CommandBase):
-    name: SchemaCategoryName
+class UpdateCategoryCodeCommand(CommandBase):
+    code: SchemaCategoryCode
 
-    async def check_command(self, category: Category, db_session: AsyncSession) -> DomainError | None:
-        if self.name != category.name and await load_handle(
-            db_session=db_session, user_id=category.user_id, name=self.name
-        ):
-            return ConflictError('Category with that name already exists')
+    def apply(self, category: Category) -> Category:
+        category.code = self.code
+        return category
 
-    async def apply(self, category: Category, db_session: AsyncSession) -> Category:
-        if error := await self.check_command(category, db_session):
-            raise error
 
-        category.name = self.name
+class UpdateCategoryTitleCommand(CommandBase):
+    title: SchemaCategoryTitle
+
+    def apply(self, category: Category) -> Category:
+        category.title = self.title
         return category
 
 
 class UpdateCategoryDescriptionCommand(CommandBase):
     description: SchemaCategoryDescription
 
-    async def apply(self, category: Category, _: AsyncSession) -> Category:
+    def apply(self, category: Category) -> Category:
         category.description = self.description
         return category
 
@@ -46,81 +45,52 @@ class UpdateCategoryDescriptionCommand(CommandBase):
 class UpdateCategoryTagsCommand(CommandBase):
     tags: SchemaCategoryTags
 
-    async def apply(self, category: Category, _: AsyncSession) -> Category:
+    async def apply(self, category: Category) -> Category:
         category.tags = self.tags
         return category
 
 
 class UpdateCategoryStatusCommand(CommandBase):
     status: SchemaCategoryStatus
-    cascade: bool = False
 
-    async def checks(self, category: Category, db_session: AsyncSession) -> DomainError | None:
-        if self.cascade:
-            return
-
-        if self.status == EnumCategoryStatus.DISABLED:
-            ...
-            # child_categories = await list_handle(db_session=db_session, parent_id=category.id)
-
-    async def apply(self, category: Category, db_session: AsyncSession) -> Category:
-        if error := await self.checks(category, db_session):
-            raise error
-
+    def apply(self, category: Category) -> Category:
         category.status = self.status
         return category
 
 
-class UpdateCategoryParentCommand(CommandBase):
-    parent_id: SchemaCategoryID | None
-
-    async def checks(self, category: Category, db_session: AsyncSession) -> DomainError | None:
-        if not self.parent_id:
-            return
-
-        if category.id == self.parent_id:
-            return ConflictError('Category cannot be a parent for itself')
-
-        parent_category = await load_handle(db_session=db_session, category_id=self.parent_id)
-        if not parent_category or parent_category.user_id != category.user_id:
-            return NotFoundError('Parent category not found')
-
-        while parent_category and parent_category.parent_id and parent_category.parent_id != category.id:
-            parent_category = await load_handle(db_session=db_session, category_id=parent_category.parent_id)
-
-        if parent_category and parent_category.parent_id == category.id:
-            return ConflictError('Cyclic hierarchies of categories are not allowed')
-
-    async def apply(self, category: Category, db_session: AsyncSession) -> Category:
-        if error := await self.checks(category, db_session):
-            raise error
-
-        category.parent_id = self.parent_id
-        return category
-
-
 UpdateCategoryCommand = (
-    UpdateCategoryNameCommand
+    UpdateCategoryCodeCommand
+    | UpdateCategoryTitleCommand
     | UpdateCategoryDescriptionCommand
     | UpdateCategoryTagsCommand
     | UpdateCategoryStatusCommand
 )
 
 
+@load_category()
+@auto_parse_kwargs(command_types=get_args(UpdateCategoryCommand))
 async def handle(
-    *, category: Category, db_session: AsyncSession, commands: list[UpdateCategoryCommand], **_
+    *,
+    category: Category | None,
+    db_session: AsyncSession,
+    commands: list[UpdateCategoryCommand],
+    **_,
 ) -> Category:
-    db_session.add(category)
+    if category is None:
+        raise CategoryNotFoundError
 
     for command in commands:
-        await command.apply(category, db_session)
+        command.apply(category)
 
-    category.updated = datetime.now()
-    await db_session.commit()
+    try:
+        await db_session.commit()
+    except sqlalchemy.exc.IntegrityError as exc:
+        if isinstance(exc.orig, asyncpg.UniqueViolationError):
+            raise CategoryConflictError from exc
+        raise
 
     return category
 
 
-@auto_parse_kwargs(command_types=get_args(UpdateCategoryCommand))
 async def auto_handle(**kwargs: Any) -> Category:
     return await handle(**kwargs)

@@ -1,7 +1,8 @@
-from collections import defaultdict
 import datetime as dt
+from collections import defaultdict
 
 from pydantic import BaseModel, Field
+from shared.cqs.query.handler import QueryHandlerABC
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -11,7 +12,6 @@ from application.transaction.cqs.queries.list import ListTransactionQuery
 from application.transaction.cqs.queries.load import load_query_parse
 from domain.transaction.model import EnumTransactionType, Transaction
 from domain.vo.money import Money
-from shared.cqs.query.handler import QueryHandlerABC
 
 
 class AnalyticsByDay(BaseModel):

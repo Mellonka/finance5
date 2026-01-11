@@ -2,9 +2,9 @@ import pytest
 
 from application.account.cqs.commands.update import (
     UpdateAccountBalanceCommand,
+    UpdateAccountCodeCommand,
     UpdateAccountCurrencyCommand,
     UpdateAccountDescriptionCommand,
-    UpdateAccountNameCommand,
     UpdateAccountStatusCommand,
     UpdateAccountTagsCommand,
     UpdateAccountTypeCommand,
@@ -18,7 +18,7 @@ from domain.vo.money import Money
 from shared.utils import uuid
 
 commands = [
-    UpdateAccountNameCommand(name=uuid()),
+    UpdateAccountCodeCommand(code=uuid()),
     UpdateAccountDescriptionCommand(description=uuid()),
     UpdateAccountDescriptionCommand(description=None),
     *[UpdateAccountTypeCommand(type=type) for type in EnumAccountType],
@@ -31,8 +31,8 @@ commands = [
 
 def check_updated_account(updated_account, command):
     match command:
-        case UpdateAccountNameCommand():
-            assert updated_account.name == command.name
+        case UpdateAccountCodeCommand():
+            assert updated_account.name == command.code
         case UpdateAccountDescriptionCommand():
             assert updated_account.description == command.description
         case UpdateAccountTypeCommand():
@@ -95,7 +95,7 @@ async def test_handle_account_update_commands(check_eq, dataset, session_maker, 
     tags = [uuid(), uuid()]
     balance = Money('69.69')
     commands = [
-        UpdateAccountNameCommand(name=name),
+        UpdateAccountCodeCommand(code=name),
         UpdateAccountDescriptionCommand(description=description),
         UpdateAccountTagsCommand(tags=tags),
         UpdateAccountBalanceCommand(balance=balance),
